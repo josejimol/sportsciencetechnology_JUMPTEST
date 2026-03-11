@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CMJ Analyzer — Kinovea</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00d4ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CMJ Analyzer">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:       #080c12;
+    --surface:  #0f1520;
+    --surface2: #162030;
+    --border:   #1c2d42;
+    --accent:   #00d4ff;
+    --green:    #00e676;
+    --orange:   #ff6d2e;
+    --purple:   #b06aff;
+    --yellow:   #ffd23f;
+    --red:      #ff4560;
+    --text:     #dce8f5;
+    --muted:    #4a6280;
+    --ph-ecc:   rgba(176,106,255,0.12);
+    --ph-con:   rgba(0,230,118,0.12);
+    --ph-fly:   rgba(0,212,255,0.12);
+    --ph-land:  rgba(255,109,46,0.12);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .app-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+
+  .app-title span {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ctrl-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .ctrl-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    padding: 7px 12px;
+    border-radius: 6px;
+    width: 80px;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+
+  .ctrl-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .btn-file {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-file:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  #filename {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--green);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-analyze {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 9px 22px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn-analyze:hover { opacity: 0.85; }
+  .btn-analyze:active { transform: scale(0.97); }
+  .btn-analyze:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── MAIN ── */
+  .main {
+    padding: 28px 32px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* ── UPLOAD STATE ── */
+  .upload-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 16px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .upload-hint .icon {
+    font-size: 3rem;
+    opacity: 0.3;
+  }
+
+  .upload-hint p {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+  }
+
+  /* ── ERROR ── */
+  .error-box {
+    background: rgba(255,69,96,0.1);
+    border: 1px solid rgba(255,69,96,0.3);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--red);
+    margin-bottom: 24px;
+  }
+
+  /* ── KPI GRID ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 2px;
+  }
+
+  .kpi.c-accent::after  { background: var(--accent); }
+  .kpi.c-green::after   { background: var(--green); }
+  .kpi.c-orange::after  { background: var(--orange); }
+  .kpi.c-purple::after  { background: var(--purple); }
+  .kpi.c-yellow::after  { background: var(--yellow); }
+  .kpi.c-red::after     { background: var(--red); }
+  .kpi.c-blue::after    { background: #5b8aff; }
+
+  .kpi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .kpi-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.85rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .kpi.c-accent .kpi-value  { color: var(--accent); }
+  .kpi.c-green .kpi-value   { color: var(--green); }
+  .kpi.c-orange .kpi-value  { color: var(--orange); }
+  .kpi.c-purple .kpi-value  { color: var(--purple); }
+  .kpi.c-yellow .kpi-value  { color: var(--yellow); }
+  .kpi.c-red .kpi-value     { color: var(--red); }
+  .kpi.c-blue .kpi-value    { color: #5b8aff; }
+
+  .kpi-unit {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  /* ── PHASE LEGEND ── */
+  .phase-legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    padding: 12px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .pl-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .pl-dot {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }
+
+  /* ── CHARTS ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .chart-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .chart-subtitle {
+    font-size: 0.8rem;
+    color: var(--text);
+    opacity: 0.45;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 280px;
+  }
+
+  /* ── HIDDEN ── */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div class="app-title">CMJ ANALYZER <span>// Kinovea</span></div>
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="ctrl-label">FPS</span>
+      <input type="number" id="fps" class="ctrl-input" value="75" min="1" max="1000">
+    </div>
+    <label class="btn-file">
+      📂 Cargar CSV
+      <input type="file" id="fileInput" accept=".csv">
+    </label>
+    <span id="filename">— sin archivo —</span>
+    <button class="btn-analyze" id="btnAnalyze" disabled>ANALIZAR</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div id="errorBox" class="error-box hidden"></div>
+
+  <!-- Upload hint -->
+  <div id="uploadHint" class="upload-hint">
+    <div class="icon">📈</div>
+    <p>Carga un CSV exportado de Kinovea e introduce los FPS<br>para analizar el salto vertical CMJ.</p>
+  </div>
+
+  <!-- Dashboard (hidden until analyzed) -->
+  <div id="dashboard" class="hidden">
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="phase-legend" id="phaseLegend"></div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">// Posición</span>
+        <span class="chart-subtitle">cm · fase excéntrica → aterrizaje</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartPos"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">// Velocidad</span>
+        <span class="chart-subtitle">m/s · diferencias centrales</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartVel"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let rawData = null;
+let chartPos = null;
+let chartVel = null;
+
+// ─── FILE INPUT ──────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    rawData = ev.target.result;
+    document.getElementById('btnAnalyze').disabled = false;
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btnAnalyze').addEventListener('click', analyze);
+
+// ─── PARSE CSV ───────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const tiempo = [], posicion = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(';');
+    if (parts.length < 2) continue;
+    const t = parseFloat(parts[0].replace(',', '.').replace(/"/g, ''));
+    const p = parseFloat(parts[1].replace(',', '.').replace(/"/g, ''));
+    if (!isNaN(t) && !isNaN(p)) {
+      tiempo.push(t);
+      posicion.push(p);
+    }
+  }
+  if (tiempo.length < 10) throw new Error('No se pudieron leer datos suficientes del CSV. Verifica el formato.');
+  return { tiempo, posicion };
+}
+
+// ─── MOVING AVERAGE ──────────────────────────────────────
+function movingAvg(arr, win) {
+  const out = new Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    let s = 0, c = 0;
+    for (let j = Math.max(0, i - win); j <= Math.min(arr.length - 1, i + win); j++) {
+      s += arr[j]; c++;
+    }
+    out[i] = s / c;
+  }
+  return out;
+}
+
+// ─── DETECT PHASES ───────────────────────────────────────
+function detectPhases(posNorm) {
+  const n = posNorm.length;
+
+  // 1. Mínimo absoluto = fondo contramovimiento
+  let idx_min = 0;
+  for (let i = 1; i < n; i++) if (posNorm[i] < posNorm[idx_min]) idx_min = i;
+
+  // 2. Inicio fase excéntrica: desde idx_min hacia atrás
+  //    Suavizamos y buscamos el último máximo local antes del descenso sostenido
+  const smooth = movingAvg(posNorm, 5);
+  let idx_ecc = 0;
+  // Recorrer hacia atrás desde idx_min buscando el máximo local más significativo
+  // Un máximo local es aquel que es mayor que sus vecinos en una ventana amplia
+  let bestMax = -Infinity;
+  let bestIdx = 0;
+  for (let i = idx_min - 1; i >= 1; i--) {
+    if (smooth[i] > bestMax) {
+      bestMax = smooth[i];
+      bestIdx = i;
+    }
+    // Si llevamos subiendo mucho y encontramos un pico claro, parar
+    if (smooth[i] > smooth[i-1] && smooth[i] > smooth[Math.min(n-1, i+1)]) {
+      // pico local, candidato
+    }
+  }
+  idx_ecc = bestIdx;
+  // Validación: debe estar al menos 3 frames antes de idx_min
+  if (idx_min - idx_ecc < 3) idx_ecc = Math.max(0, idx_min - 5);
+
+  // 3. Despegue: primer cruce ascendente de 0 después de idx_min
+  let idx_dep = -1;
+  for (let i = idx_min + 1; i < n - 1; i++) {
+    if (posNorm[i] <= 0 && posNorm[i + 1] > 0) {
+      idx_dep = i;
+      break;
+    }
+  }
+  if (idx_dep === -1) idx_dep = idx_min + Math.floor((n - idx_min) * 0.3);
+
+  // 4. Pico de vuelo: máximo después del despegue
+  let idx_peak = idx_dep;
+  for (let i = idx_dep + 1; i < n; i++) {
+    if (posNorm[i] > posNorm[idx_peak]) idx_peak = i;
+  }
+
+  // 5. Aterrizaje: primer cruce descendente de 0 después del pico
+  let idx_land = -1;
+  for (let i = idx_peak + 1; i < n - 1; i++) {
+    if (posNorm[i] >= 0 && posNorm[i + 1] < 0) {
+      idx_land = i + 1;
+      break;
+    }
+  }
+  if (idx_land === -1) idx_land = n - 1;
+
+  return { idx_ecc, idx_min, idx_dep, idx_peak, idx_land };
+}
+
+// ─── CENTRAL DIFFERENCES VELOCITY ────────────────────────
+function calcVelocity(pos, dt_s) {
+  const n = pos.length;
+  const vel = new Array(n).fill(0);
+  for (let i = 1; i < n - 1; i++) {
+    vel[i] = (pos[i + 1] - pos[i - 1]) / (2 * dt_s) / 100; // cm/s → m/s
+  }
+  vel[0] = vel[1];
+  vel[n - 1] = vel[n - 2];
+  return vel;
+}
+
+// ─── MAIN ANALYZE ─────────────────────────────────────────
+function analyze() {
+  const errBox = document.getElementById('errorBox');
+  errBox.classList.add('hidden');
+
+  try {
+    if (!rawData) throw new Error('No hay datos cargados.');
+
+    const fps = parseFloat(document.getElementById('fps').value);
+    if (isNaN(fps) || fps <= 0) throw new Error('FPS no válido.');
+
+    const { tiempo, posicion } = parseCSV(rawData);
+    const n = posicion.length;
+
+    // Normalizar con primer valor como offset
+    const offset = posicion[0];
+    const posNorm = posicion.map(p => p - offset);
+
+    // Detectar fases
+    const { idx_ecc, idx_min, idx_dep, idx_peak, idx_land } = detectPhases(posNorm);
+
+    // dt real
+    const dt_s = 1 / fps;
+
+    // Velocidades
+    const vel = calcVelocity(posNorm, dt_s);
+
+    // Recortar al rango excéntrica → aterrizaje
+    const tSlice   = tiempo.slice(idx_ecc, idx_land + 1);
+    const posSlice = posNorm.slice(idx_ecc, idx_land + 1);
+    const velSlice = vel.slice(idx_ecc, idx_land + 1);
+
+    // Índices relativos al slice
+    const r = i => i - idx_ecc;
+    const ri_min  = r(idx_min);
+    const ri_dep  = r(idx_dep);
+    const ri_peak = r(idx_peak);
+    const ri_land = r(idx_land);
+
+    // ── MÉTRICAS ──
+    const altSalto   = posNorm[idx_peak];                          // cm
+    const profCM     = Math.abs(posNorm[idx_min]);                 // cm
+    const tVuelo     = tiempo[idx_land] - tiempo[idx_dep];         // ms
+    const vDespegue  = vel[idx_dep];                               // m/s
+    const vMax       = Math.max(...vel.slice(idx_ecc, idx_land + 1)); // m/s
+    const durEcc     = tiempo[idx_min] - tiempo[idx_ecc];          // ms
+    const durCon     = tiempo[idx_dep] - tiempo[idx_min];          // ms
+
+    // Índice de velocidad máxima en el slice
+    let ri_vmax = 0;
+    let vMaxVal = -Infinity;
+    for (let i = 0; i < velSlice.length; i++) {
+      if (velSlice[i] > vMaxVal) { vMaxVal = velSlice[i]; ri_vmax = i; }
+    }
+
+    // ── KPIs ──
+    renderKPIs([
+      { label: 'Altura de salto',         value: altSalto.toFixed(1),   unit: 'cm',  cls: 'c-accent'  },
+      { label: 'Profundidad CM',           value: profCM.toFixed(1),     unit: 'cm',  cls: 'c-purple'  },
+      { label: 'Tiempo de vuelo',          value: tVuelo,                unit: 'ms',  cls: 'c-blue'    },
+      { label: 'Vel. de despegue',         value: vDespegue.toFixed(3),  unit: 'm/s', cls: 'c-green'   },
+      { label: 'Vel. máxima marcador',     value: vMax.toFixed(3),       unit: 'm/s', cls: 'c-yellow'  },
+      { label: 'Duración fase excéntrica', value: durEcc,                unit: 'ms',  cls: 'c-orange'  },
+      { label: 'Duración propulsión',      value: durCon,                unit: 'ms',  cls: 'c-red'     },
+    ]);
+
+    // ── PHASE LEGEND ──
+    document.getElementById('phaseLegend').innerHTML = `
+      <div class="pl-item"><div class="pl-dot" style="background:#b06aff"></div>Fase excéntrica</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#00e676"></div>Propulsión</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#00d4ff"></div>Vuelo</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#ff6d2e"></div>Aterrizaje</div>
+      <div class="pl-item" style="margin-left:auto;color:#4a6280;font-size:.68rem">
+        offset = ${offset.toFixed(4)} cm · fps = ${fps} · Δt = ${(dt_s*1000).toFixed(2)} ms · ${n} frames
+      </div>
+    `;
+
+    // ── ANNOTATIONS ──
+    const t_ecc  = tSlice[0];
+    const t_min  = tSlice[ri_min];
+    const t_dep  = tSlice[ri_dep];
+    const t_peak = tSlice[ri_peak];
+    const t_land = tSlice[ri_land];
+
+    const phaseBoxes = (yMin, yMax) => ({
+      ph_ecc:  { type:'box', xMin:t_ecc,  xMax:t_min,  yMin, yMax, backgroundColor:'rgba(176,106,255,0.10)', borderWidth:0 },
+      ph_con:  { type:'box', xMin:t_min,  xMax:t_dep,  yMin, yMax, backgroundColor:'rgba(0,230,118,0.10)',   borderWidth:0 },
+      ph_fly:  { type:'box', xMin:t_dep,  xMax:t_land, yMin, yMax, backgroundColor:'rgba(0,212,255,0.10)',   borderWidth:0 },
+      ph_land: { type:'box', xMin:t_land, xMax:tSlice[tSlice.length-1], yMin, yMax, backgroundColor:'rgba(255,109,46,0.10)', borderWidth:0 },
+    });
+
+    const vLines = (labels) => ({
+      vl_min:  { type:'line', xMin:t_min,  xMax:t_min,  borderColor:'rgba(176,106,255,0.6)', borderWidth:1.5, borderDash:[4,3],
+                  label: labels ? {content:'CM mín', display:true, color:'#b06aff', font:{family:'IBM Plex Mono',size:9}, position:'start'} : undefined },
+      vl_dep:  { type:'line', xMin:t_dep,  xMax:t_dep,  borderColor:'rgba(0,230,118,0.7)',   borderWidth:1.5, borderDash:[4,3],
+                  label: labels ? {content:'despegue', display:true, color:'#00e676', font:{family:'IBM Plex Mono',size:9}, position:'start'} : undefined },
+      vl_peak: { type:'line', xMin:t_peak, xMax:t_peak, borderColor:'rgba(0,212,255,0.5)',   borderWidth:1.5, borderDash:[4,3],
+                  label: labels ? {content:'pico', display:true, color:'#00d4ff', font:{family:'IBM Plex Mono',size:9}, position:'start'} : undefined },
+      vl_land: { type:'line', xMin:t_land, xMax:t_land, borderColor:'rgba(255,109,46,0.7)',  borderWidth:1.5, borderDash:[4,3],
+                  label: labels ? {content:'aterrizaje', display:true, color:'#ff6d2e', font:{family:'IBM Plex Mono',size:9}, position:'start'} : undefined },
+    });
+
+    const commonScales = {
+      x: {
+        ticks: { color:'#4a6280', font:{family:'IBM Plex Mono',size:9}, maxTicksLimit:12 },
+        grid:  { color:'rgba(28,45,66,0.7)' },
+        border:{ color:'#1c2d42' },
+        title: { display:true, text:'Tiempo (ms)', color:'#4a6280', font:{family:'IBM Plex Mono',size:9} }
+      },
+      y: {
+        ticks: { color:'#4a6280', font:{family:'IBM Plex Mono',size:9} },
+        grid:  { color:'rgba(28,45,66,0.7)' },
+        border:{ color:'#1c2d42' }
+      }
+    };
+
+    const commonPlugins = {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15,21,32,0.97)',
+        borderColor: '#1c2d42', borderWidth: 1,
+        titleColor: '#4a6280', bodyColor: '#dce8f5',
+        titleFont: { family:'IBM Plex Mono', size:10 },
+        bodyFont:  { family:'IBM Plex Mono', size:11 },
+        callbacks: { title: items => `t = ${items[0].label} ms` }
+      }
+    };
+
+    // ── CHART POSICIÓN ──
+    if (chartPos) chartPos.destroy();
+    chartPos = new Chart(document.getElementById('chartPos'), {
+      type: 'line',
+      data: {
+        labels: tSlice,
+        datasets: [{
+          data: posSlice,
+          borderColor: '#00d4ff',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.3,
+          fill: { target: 'origin', above: 'rgba(0,212,255,0.05)', below: 'rgba(176,106,255,0.05)' }
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration:400 },
+        plugins: {
+          ...commonPlugins,
+          annotation: {
+            annotations: {
+              ...phaseBoxes(Math.min(...posSlice)*1.1, Math.max(...posSlice)*1.1),
+              ...vLines(true),
+              zero: { type:'line', yMin:0, yMax:0, borderColor:'rgba(74,98,128,0.5)', borderWidth:1, borderDash:[3,3] },
+              peakPt: { type:'point', xValue:t_peak, yValue:posSlice[ri_peak], backgroundColor:'#00d4ff', radius:5, borderColor:'#00d4ff' },
+              minPt:  { type:'point', xValue:t_min,  yValue:posSlice[ri_min],  backgroundColor:'#b06aff', radius:5, borderColor:'#b06aff' },
+            }
+          }
+        },
+        scales: { ...commonScales, y: { ...commonScales.y, title:{ display:true, text:'Posición (cm)', color:'#4a6280', font:{family:'IBM Plex Mono',size:9} } } }
+      }
+    });
+
+    // ── CHART VELOCIDAD ──
+    if (chartVel) chartVel.destroy();
+    chartVel = new Chart(document.getElementById('chartVel'), {
+      type: 'line',
+      data: {
+        labels: tSlice,
+        datasets: [{
+          data: velSlice,
+          borderColor: '#00e676',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.3,
+          fill: { target: 'origin', above: 'rgba(0,230,118,0.06)', below: 'rgba(255,109,46,0.06)' }
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration:400 },
+        plugins: {
+          ...commonPlugins,
+          annotation: {
+            annotations: {
+              ...phaseBoxes(Math.min(...velSlice)*1.15, Math.max(...velSlice)*1.15),
+              ...vLines(false),
+              zero:    { type:'line', yMin:0,    yMax:0,    borderColor:'rgba(74,98,128,0.5)', borderWidth:1, borderDash:[3,3] },
+              depPt:   { type:'point', xValue:t_dep, yValue:velSlice[ri_dep], backgroundColor:'#00e676', radius:6, borderColor:'#00e676',
+                          label:{ content:`v_dep ${vDespegue.toFixed(2)} m/s`, display:true, color:'#00e676', font:{family:'IBM Plex Mono',size:9}, position:'start', yAdjust:-14 } },
+              vmaxPt:  { type:'point', xValue:tSlice[ri_vmax], yValue:velSlice[ri_vmax], backgroundColor:'#ffd23f', radius:6, borderColor:'#ffd23f',
+                          label:{ content:`v_max ${vMax.toFixed(2)} m/s`, display:true, color:'#ffd23f', font:{family:'IBM Plex Mono',size:9}, position:'start', yAdjust:-14 } },
+            }
+          }
+        },
+        scales: { ...commonScales, y: { ...commonScales.y, title:{ display:true, text:'Velocidad (m/s)', color:'#4a6280', font:{family:'IBM Plex Mono',size:9} } } }
+      }
+    });
+
+    // Show dashboard
+    document.getElementById('uploadHint').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+
+  } catch(err) {
+    errBox.textContent = '⚠ ' + err.message;
+    errBox.classList.remove('hidden');
+  }
+}
+
+// ─── SERVICE WORKER ───────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('SW registrado'))
+      .catch(e => console.warn('SW error:', e));
+  });
+}
+
+// ─── INSTALL PROMPT (Android) ─────────────────────────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Mostrar botón de instalación
+  const btn = document.createElement('button');
+  btn.className = 'btn-analyze';
+  btn.textContent = '📲 Instalar App';
+  btn.style.background = '#00e676';
+  btn.onclick = () => {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => btn.remove());
+  };
+  document.querySelector('.controls').appendChild(btn);
+});
+
+// ─── RENDER KPIs ──────────────────────────────────────────
+function renderKPIs(items) {
+  document.getElementById('kpiGrid').innerHTML = items.map(k => `
+    <div class="kpi ${k.cls}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-unit">${k.unit}</div>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>
